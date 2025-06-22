@@ -4,6 +4,7 @@ HomeAssistant-DesktopPlus allows windows users to open HomeAssistant on their de
 You can have the window stay on top of other running programs.
 You can have it with or without a window frame.   
 You can lock the screen size or allow it to be resizable.
+You can set the dash to reload at a given interval.
 And you can set the exact coordinates of the window so that it always opens up in the same location.
 
 USE CASE:
