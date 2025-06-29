@@ -14,10 +14,14 @@ The default settings on a 4k screen will cover the entire background but not the
 INSTALL INSTRUCTIONS:
 Note this was tested on Windows 11 with Python 3.13.5
 
-Firt you need to install Python if it is not already installed.  
+First you need to install Python if it is not already installed.  
 If you need to install Python, head over to: https://www.python.org/downloads/  and click the button at the top to download the lates version.
 Once Python is installed, open a windows terminal elevated and type the following:  pip install pywebview
 Press Enter and let it install.  
 
 Once this installed, copy the script to a folder of your choosing.  Next right click on it, and select "Show More Options" then select "Send to Desktop (Shortcut)".
-This will give you a shortcut that will open your homeassistant.  You can then add that icon to your starup so that it will open on login.  
+This will give you a shortcut that will open your homeassistant.  You can then add that icon to your startup so that it will open on login.  
+
+
+There is nothing stopping anyone from opening up more than one instance at a time.  I run 2, one for each screen on my PC.  
+As long as you use the auto-refresh option you should be able to keep the screens open indefinitely.
