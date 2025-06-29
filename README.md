@@ -23,5 +23,6 @@ Once this installed, copy the script to a folder of your choosing.  Next right c
 This will give you a shortcut that will open your homeassistant.  You can then add that icon to your startup so that it will open on login.  
 
 
-There is nothing stopping anyone from opening up more than one instance at a time.  I run 2, one for each screen on my PC.  
-As long as you use the auto-refresh option you should be able to keep the screens open indefinitely.
+There is nothing stopping anyone from opening up more than one instance at a time.  
+I run 2, one for each screen on my PC.  
+As long as you use the auto-refresh option, you should be able to keep the screens open indefinitely.
