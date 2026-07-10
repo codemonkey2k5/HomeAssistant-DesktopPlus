@@ -136,7 +136,7 @@ Keep `DesktopPlus.pyw`, `desktopplus_core.py`, and `desktopplus_ui.py` in the **
 
 ## Version
 
-**2.0.0** — full rewrite: multi-monitor work-area placement, system tray UI, URL configuration, mixed-DPI fixes, scroll options.
+**2.0** — full rewrite: multi-monitor work-area placement, system tray UI, URL configuration, mixed-DPI fixes, scroll options.
 
 ---
 
