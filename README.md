@@ -121,12 +121,16 @@ You do **not** set screen coordinates manually. Geometry is always computed from
 
 | File | Purpose |
 |------|---------|
-| `DesktopPlus.pyw` | Main application (double-click to run) |
+| `DesktopPlus.pyw` | Launcher — **double-click this** to run |
+| `desktopplus_core.py` | Monitors, config, window placement |
+| `desktopplus_ui.py` | Tray menu, webview window, main loop |
 | `requirements.txt` | Python dependencies |
 | `tray_icon.png` | Tray icon (auto-created if missing) |
 | `run_debug.bat` | Console launch for diagnosing errors |
 | `config.json` | Local settings (created at runtime; not in git) |
 | `desktopplus.log` | Local log (created at runtime; not in git) |
+
+Keep `DesktopPlus.pyw`, `desktopplus_core.py`, and `desktopplus_ui.py` in the **same folder**.
 
 ---
 
