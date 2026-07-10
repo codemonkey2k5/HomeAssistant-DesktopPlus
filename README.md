@@ -1,13 +1,13 @@
 # DesktopPlus
 
-**DesktopPlus** shows your Home Assistant dashboard (or any web page) on one of your computer screens.
+**DesktopPlus** Turn any website into a clean, borderless desktop window. Fixed position • Auto-refresh • System tray controls • Multi-monitor support. (100% Free)
 
 It is meant to look like a **live desktop background**:
 
 - Fills the screen you choose  
-- Leaves the Windows taskbar visible (when that screen has one)  
+- Leaves the Windows taskbar visible, or you can choose kiosk mode if you want it to go full screen.
 - Still clickable and fully usable  
-- Does **not** stay stuck on top of other programs  
+- Does **not** stay stuck on top of other programs unless you want it to.  
 
 **Current version: 2.0**  
 **Works on:** Windows 10 and Windows 11  
@@ -179,7 +179,7 @@ Version **2.0** is a new folder with several files and a tray menu. You do **not
 
 1. **Close** the old program if it is running  
    - Close the dashboard window, or end it from Task Manager if needed.  
-2. **Optional but smart:** Copy your old file somewhere safe as a backup  
+2. **Optional but a good idea:** Copy your old file somewhere safe as a backup  
    - Example: copy `HAD-PLus.pyw` to a folder named `DesktopPlus-backup`.  
 3. Download **version 2.0** the same way as **Install → Step 1** (new folder, extract the zip).  
 4. Do **Install → Step 2** only if Python is not installed yet.  
