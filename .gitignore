@@ -1,0 +1,24 @@
+# Runtime / local config (created on first run)
+config.json
+desktopplus.log
+panel.log
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyw.bak
+.venv/
+venv/
+.env
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+.vscode/
+
+# Local test leftovers
+_geom_test.py
+_pyw_test.txt
