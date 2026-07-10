@@ -122,6 +122,7 @@ class App:
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._refresh_deadline = 0.0
+        self.page_title: str = ""
 
     def update_config(self, **kwargs: Any) -> AppConfig:
         with self._lock:
@@ -131,11 +132,74 @@ class App:
             if "url" in kwargs and isinstance(self.cfg.url, str):
                 self.cfg.url = normalize_url(self.cfg.url)
             save_config(self.cfg)
-            return AppConfig.from_dict(asdict(self.cfg))
+            cfg = AppConfig.from_dict(asdict(self.cfg))
+        # Refresh tray label when display (or anything identity-related) changes
+        if "display_index" in kwargs or "url" in kwargs:
+            self.update_tray_title()
+        return cfg
 
     def get_config(self) -> AppConfig:
         with self._lock:
             return AppConfig.from_dict(asdict(self.cfg))
+
+    def screen_number(self) -> int:
+        """1-based screen number for humans."""
+        cfg = self.get_config()
+        mons = get_monitors()
+        idx = clamp_display_index(cfg.display_index, mons)
+        return idx + 1
+
+    def tray_label(self) -> str:
+        """
+        Hover text for the tray icon so multiple instances are easy to tell apart.
+        Example: DesktopPlus | Screen 2 | Overview
+        """
+        screen = self.screen_number()
+        title = (self.page_title or "").strip()
+        # Clean up empty / generic titles
+        if title.lower() in ("", "about:blank", "home assistant"):
+            # Still show HA if that's all we have; drop about:blank
+            if title.lower() == "about:blank":
+                title = ""
+        if len(title) > 40:
+            title = title[:37] + "..."
+        if title:
+            return f"{APP_NAME} | Screen {screen} | {title}"
+        return f"{APP_NAME} | Screen {screen}"
+
+    def update_tray_title(self) -> None:
+        """Update tray hover text (and log it). Safe to call from any thread."""
+        label = self.tray_label()
+        icon = self.icon
+        if icon is not None:
+            try:
+                icon.title = label
+            except Exception as e:
+                log(f"tray title update failed: {e}")
+        log(f"tray label: {label}")
+
+    def refresh_page_title(self) -> None:
+        """Read document.title from the webview and update the tray label."""
+        window = self.window
+        if window is None:
+            self.update_tray_title()
+            return
+        title = ""
+        try:
+            result = window.evaluate_js(
+                "(function(){ try { return document.title || ''; } catch(e) { return ''; } })()"
+            )
+            if result is not None:
+                title = str(result).strip()
+        except Exception as e:
+            log(f"page title read failed: {e}")
+        self.page_title = title
+        self.update_tray_title()
+        # Also set OS window title (visible if not frameless / task manager)
+        try:
+            window.set_title(self.tray_label())
+        except Exception:
+            pass
 
     def apply_geometry(self) -> None:
         window = self.window
@@ -156,6 +220,7 @@ class App:
         ok = set_native_bounds(window, x, y, w, h)
         if not ok:
             self._notify("Could not move window to the selected display.")
+        self.update_tray_title()
 
     def apply_scroll_policy(self) -> None:
         window = self.window
@@ -242,6 +307,10 @@ class App:
         def on_loaded() -> None:
             time.sleep(0.35)
             self.apply_scroll_policy()
+            # Page title can lag a bit on Home Assistant; try twice
+            self.refresh_page_title()
+            time.sleep(1.0)
+            self.refresh_page_title()
 
         try:
             window.events.loaded += on_loaded
@@ -252,6 +321,7 @@ class App:
         self.apply_on_top()
         self.apply_scroll_policy()
         self._arm_refresh_deadline()
+        self.update_tray_title()
 
         while not self._stop.is_set():
             try:
@@ -474,9 +544,11 @@ def build_tray_menu(app: App) -> Menu:
 def start_tray(app: App) -> None:
     try:
         menu = build_tray_menu(app)
-        icon = Icon("DesktopPlus", get_tray_image(), APP_NAME, menu)
+        # Unique icon name per screen helps Windows keep instances distinct
+        icon_name = f"DesktopPlus-S{app.screen_number()}"
+        icon = Icon(icon_name, get_tray_image(), app.tray_label(), menu)
         app.icon = icon
-        log("tray icon starting")
+        log(f"tray icon starting ({app.tray_label()})")
         icon.run()
     except Exception as e:
         log(f"tray failed: {e}\n{traceback.format_exc()}")
@@ -533,8 +605,10 @@ def main() -> int:
     start_url = cfg.url
 
     try:
+        # Initial title includes screen; page title is filled in after load
+        initial_title = f"{APP_NAME} | Screen {clamp_display_index(cfg.display_index, mons) + 1}"
         window = webview.create_window(
-            cfg.window_title or APP_NAME,
+            initial_title,
             start_url,
             x=create_x,
             y=create_y,
