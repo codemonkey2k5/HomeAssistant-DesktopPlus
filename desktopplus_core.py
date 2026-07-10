@@ -29,7 +29,7 @@ ICON_PATH = BASE_DIR / "tray_icon.png"
 
 DEFAULT_URL = ""
 APP_NAME = "DesktopPlus"
-__version__ = "2.0.0"
+__version__ = "2.0"
 
 def log(message: str) -> None:
     line = f"{time.strftime('%Y-%m-%d %H:%M:%S')}  {message}"
