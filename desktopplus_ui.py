@@ -1,13 +1,20 @@
-"""DesktopPlus UI, tray, and entrypoint."""
+"""
+DesktopPlus UI, tray, and entrypoint.
+
+Version 2.1.1: all webview/Win32 work runs on the backend loop thread via a command
+queue so the tray never blocks and refresh is reliable.
+"""
+
 from __future__ import annotations
 
+import queue
 import sys
 import threading
 import time
 import traceback
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import webview
 from PIL import Image, ImageDraw
@@ -31,17 +38,20 @@ from desktopplus_core import (
     primary_scale_factor,
     prompt_for_url,
     pywebview_create_xy,
+    reset_page_scroll,
     resolve_geometry,
     set_native_bounds,
     show_error,
     save_config,
+    __version__,
 )
 
+
+# ---------------------------------------------------------------------------
+# Tray icon image
+# ---------------------------------------------------------------------------
+
 def make_tray_image(size: int = 64) -> Image.Image:
-    """
-    Distinct icon: dark rounded tile + cyan monitor bezel + 4 dashboard tiles.
-    Saved to tray_icon.png for reuse / branding.
-    """
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
@@ -52,7 +62,7 @@ def make_tray_image(size: int = 64) -> Image.Image:
         fill=(18, 28, 40, 255),
     )
 
-    bezel = (0, 188, 212, 255)  # cyan
+    bezel = (0, 188, 212, 255)
     mx0, my0 = size * 0.14, size * 0.16
     mx1, my1 = size * 0.86, size * 0.68
     draw.rounded_rectangle((mx0, my0, mx1, my1), radius=size // 12, fill=bezel)
@@ -66,10 +76,10 @@ def make_tray_image(size: int = 64) -> Image.Image:
     tile_w = (sx1 - sx0 - gap * 3) / 2
     tile_h = (sy1 - sy0 - gap * 3) / 2
     colors = [
-        (3, 169, 244, 255),   # blue
-        (0, 200, 150, 255),   # green
-        (255, 171, 64, 255),  # amber
-        (171, 71, 188, 255),  # purple
+        (3, 169, 244, 255),
+        (0, 200, 150, 255),
+        (255, 171, 64, 255),
+        (171, 71, 188, 255),
     ]
     coords = [
         (sx0 + gap, sy0 + gap),
@@ -93,17 +103,23 @@ def make_tray_image(size: int = 64) -> Image.Image:
         fill=bezel,
     )
     draw.rounded_rectangle(
-        (cx - stand_w, stand_top + stand_h * 0.65, cx + stand_w, stand_top + stand_h + size * 0.06),
+        (
+            cx - stand_w,
+            stand_top + stand_h * 0.65,
+            cx + stand_w,
+            stand_top + stand_h + size * 0.06,
+        ),
         radius=2,
         fill=bezel,
     )
-
     return img
+
 
 def get_tray_image() -> Image.Image:
     try:
         if ICON_PATH.exists():
-            return Image.open(ICON_PATH).convert("RGBA")
+            with Image.open(ICON_PATH) as im:
+                return im.convert("RGBA")
     except Exception as e:
         log(f"could not load tray_icon.png: {e}")
     img = make_tray_image(64)
@@ -114,6 +130,11 @@ def get_tray_image() -> Image.Image:
         log(f"could not save tray icon: {e}")
     return img
 
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
+
 class App:
     def __init__(self) -> None:
         self.cfg = load_config()
@@ -123,6 +144,14 @@ class App:
         self._stop = threading.Event()
         self._refresh_deadline = 0.0
         self.page_title: str = ""
+        self._last_tray_label: str = ""
+        # Commands processed only on the webview backend thread
+        self._cmds: queue.Queue = queue.Queue()
+        # Deferred work: list of (run_at_monotonic, name, kwargs)
+        self._deferred: List[Tuple[float, str, Dict[str, Any]]] = []
+        self._deferred_lock = threading.Lock()
+
+    # --- config ------------------------------------------------------------
 
     def update_config(self, **kwargs: Any) -> AppConfig:
         with self._lock:
@@ -133,34 +162,88 @@ class App:
                 self.cfg.url = normalize_url(self.cfg.url)
             save_config(self.cfg)
             cfg = AppConfig.from_dict(asdict(self.cfg))
-        # Refresh tray label when display (or anything identity-related) changes
         if "display_index" in kwargs or "url" in kwargs:
-            self.update_tray_title()
+            self.enqueue("update_title")
         return cfg
 
     def get_config(self) -> AppConfig:
         with self._lock:
             return AppConfig.from_dict(asdict(self.cfg))
 
+    # --- command queue ----------------------------------------------------
+
+    def enqueue(self, name: str, **kwargs: Any) -> None:
+        """Thread-safe: tray / timers only enqueue; backend_loop executes."""
+        try:
+            self._cmds.put_nowait((name, kwargs))
+        except Exception as e:
+            log(f"enqueue failed {name}: {e}")
+
+    def enqueue_after(self, delay_s: float, name: str, **kwargs: Any) -> None:
+        run_at = time.monotonic() + max(0.0, delay_s)
+        with self._deferred_lock:
+            self._deferred.append((run_at, name, kwargs))
+
+    def _drain_deferred(self) -> None:
+        now = time.monotonic()
+        due: List[Tuple[str, Dict[str, Any]]] = []
+        with self._deferred_lock:
+            keep: List[Tuple[float, str, Dict[str, Any]]] = []
+            for run_at, name, kwargs in self._deferred:
+                if run_at <= now:
+                    due.append((name, kwargs))
+                else:
+                    keep.append((run_at, name, kwargs))
+            self._deferred = keep
+        for name, kwargs in due:
+            self._dispatch(name, kwargs)
+
+    def _dispatch(self, name: str, kwargs: Dict[str, Any]) -> None:
+        try:
+            if name == "refresh":
+                self._do_refresh()
+            elif name == "geometry":
+                self._do_geometry()
+            elif name == "scroll":
+                self._do_scroll_policy()
+            elif name == "on_top":
+                self._do_on_top()
+            elif name == "set_url":
+                url = kwargs.get("url") or ""
+                self._do_set_url(url)
+            elif name == "update_title":
+                self._do_refresh_page_title()
+            elif name == "post_load":
+                self._do_post_load()
+            elif name == "chrome":
+                if self.window is not None:
+                    apply_window_chrome_tweaks(self.window)
+            else:
+                log(f"unknown command: {name}")
+        except Exception as e:
+            log(f"command {name} failed: {e}\n{traceback.format_exc()}")
+
+    def _process_cmds(self) -> None:
+        while True:
+            try:
+                name, kwargs = self._cmds.get_nowait()
+            except queue.Empty:
+                break
+            self._dispatch(name, kwargs)
+
+    # --- identity / tray label --------------------------------------------
+
     def screen_number(self) -> int:
-        """1-based screen number for humans."""
         cfg = self.get_config()
         mons = get_monitors()
         idx = clamp_display_index(cfg.display_index, mons)
         return idx + 1
 
     def tray_label(self) -> str:
-        """
-        Hover text for the tray icon so multiple instances are easy to tell apart.
-        Example: DesktopPlus | Screen 2 | Overview
-        """
         screen = self.screen_number()
         title = (self.page_title or "").strip()
-        # Clean up empty / generic titles
-        if title.lower() in ("", "about:blank", "home assistant"):
-            # Still show HA if that's all we have; drop about:blank
-            if title.lower() == "about:blank":
-                title = ""
+        if title.lower() == "about:blank":
+            title = ""
         if len(title) > 40:
             title = title[:37] + "..."
         if title:
@@ -168,7 +251,6 @@ class App:
         return f"{APP_NAME} | Screen {screen}"
 
     def update_tray_title(self) -> None:
-        """Update tray hover text (and log it). Safe to call from any thread."""
         label = self.tray_label()
         icon = self.icon
         if icon is not None:
@@ -176,10 +258,11 @@ class App:
                 icon.title = label
             except Exception as e:
                 log(f"tray title update failed: {e}")
-        log(f"tray label: {label}")
+        if label != self._last_tray_label:
+            self._last_tray_label = label
+            log(f"tray label: {label}")
 
-    def refresh_page_title(self) -> None:
-        """Read document.title from the webview and update the tray label."""
+    def _do_refresh_page_title(self) -> None:
         window = self.window
         if window is None:
             self.update_tray_title()
@@ -195,13 +278,14 @@ class App:
             log(f"page title read failed: {e}")
         self.page_title = title
         self.update_tray_title()
-        # Also set OS window title (visible if not frameless / task manager)
         try:
             window.set_title(self.tray_label())
         except Exception:
             pass
 
-    def apply_geometry(self) -> None:
+    # --- webview ops (backend thread only) --------------------------------
+
+    def _do_geometry(self) -> None:
         window = self.window
         if window is None:
             return
@@ -214,15 +298,14 @@ class App:
         x, y, w, h, mon = resolve_geometry(cfg)
         log(
             f"geometry -> display {mon.index + 1} ({mon.name}): "
-            f"x={x} y={y} {w}x{h} fit_work_area={cfg.fit_work_area} "
-            f"primary_scale={primary_scale_factor()}"
+            f"x={x} y={y} {w}x{h} fit_work_area={cfg.fit_work_area}"
         )
-        ok = set_native_bounds(window, x, y, w, h)
+        ok = set_native_bounds(window, x, y, w, h, activate=False)
         if not ok:
             self._notify("Could not move window to the selected display.")
         self.update_tray_title()
 
-    def apply_scroll_policy(self) -> None:
+    def _do_scroll_policy(self) -> None:
         window = self.window
         if window is None:
             return
@@ -238,7 +321,7 @@ class App:
         except Exception:
             pass
 
-    def apply_on_top(self) -> None:
+    def _do_on_top(self) -> None:
         window = self.window
         if window is None:
             return
@@ -248,7 +331,7 @@ class App:
         except Exception as e:
             log(f"on_top failed: {e}")
 
-    def set_url_and_load(self, url: str) -> None:
+    def _do_set_url(self, url: str) -> None:
         url = normalize_url(url)
         if not url:
             return
@@ -258,30 +341,44 @@ class App:
             try:
                 window.load_url(url)
                 self._arm_refresh_deadline()
+                log(f"loaded url: {url}")
             except Exception as e:
                 self._notify(f"Could not load URL: {e}")
                 log(f"load_url failed: {e}")
 
-    def refresh_now(self) -> None:
+    def _do_refresh(self) -> None:
+        """Hard reload on the correct thread. No URL rewriting."""
         window = self.window
         if window is None:
+            self._arm_refresh_deadline()
             return
         cfg = self.get_config()
         if not cfg.url:
             self._notify("No URL set. Use Set dashboard URL…")
+            self._arm_refresh_deadline()
             return
         try:
-            window.load_url(cfg.url)
-            log("refreshed via load_url")
-        except Exception:
+            window.evaluate_js("location.reload()")
+            log("refreshed via location.reload()")
+        except Exception as e1:
+            log(f"location.reload failed: {e1}; trying load_url")
             try:
-                window.evaluate_js("location.reload(true);")
-                log("refreshed via location.reload")
-            except Exception as e:
-                self._notify(f"Refresh failed: {e}")
-                log(f"refresh failed: {e}")
-                return
+                window.load_url(cfg.url)
+                log("refreshed via load_url")
+            except Exception as e2:
+                self._notify(f"Refresh failed: {e2}")
+                log(f"refresh failed: {e2}")
+        # Always re-arm so a failed refresh cannot stall auto-refresh for a day
         self._arm_refresh_deadline()
+
+    def _do_post_load(self) -> None:
+        """After DOM ready: scroll top, policy, quiet geometry, title."""
+        self._do_scroll_policy()
+        reset_page_scroll(self.window)
+        self._do_geometry()
+        self._do_refresh_page_title()
+        # HA often sets document.title late
+        self.enqueue_after(1.0, "update_title")
 
     def _arm_refresh_deadline(self) -> None:
         cfg = self.get_config()
@@ -300,28 +397,26 @@ class App:
         except Exception:
             pass
 
+    # --- backend loop -----------------------------------------------------
+
     def backend_loop(self, window: Any) -> None:
         self.window = window
-        log("backend_loop started")
+        log(f"backend_loop started (v{__version__})")
 
         def on_loaded() -> None:
-            time.sleep(0.35)
-            self.apply_scroll_policy()
-            # Page title can lag a bit on Home Assistant; try twice
-            self.refresh_page_title()
-            time.sleep(1.0)
-            self.refresh_page_title()
+            # Keep this handler short — defer work to the queue
+            self.enqueue("post_load")
 
         try:
             window.events.loaded += on_loaded
         except Exception as e:
             log(f"events.loaded subscribe failed: {e}")
 
-        self.apply_geometry()
-        self.apply_on_top()
-        self.apply_scroll_policy()
+        # First paint: chrome + on_top; full layout/scroll/title come from post_load
+        # when the page fires "loaded" (avoids doing the same work twice at startup).
+        self.enqueue("chrome")
+        self.enqueue("on_top")
         self._arm_refresh_deadline()
-        self.update_tray_title()
 
         while not self._stop.is_set():
             try:
@@ -330,6 +425,9 @@ class App:
             except Exception:
                 break
 
+            self._process_cmds()
+            self._drain_deferred()
+
             cfg = self.get_config()
             if (
                 cfg.refresh_enabled
@@ -337,9 +435,12 @@ class App:
                 and self._refresh_deadline > 0
                 and time.monotonic() >= self._refresh_deadline
             ):
-                self.refresh_now()
+                # Prevent re-queue until _do_refresh re-arms the real deadline
+                self._refresh_deadline = time.monotonic() + 86400.0
+                self.enqueue("refresh")
 
-            time.sleep(0.5)
+            # Idle wait: slightly longer when quiet → less CPU
+            time.sleep(0.5 if not self._cmds.empty() else 0.75)
 
         log("backend_loop ending")
         self._stop.set()
@@ -353,28 +454,45 @@ class App:
             except Exception:
                 pass
 
+
+# ---------------------------------------------------------------------------
+# System tray (handlers must not call webview APIs)
+# ---------------------------------------------------------------------------
+
 def build_tray_menu(app: App) -> Menu:
     def cfg() -> AppConfig:
         return app.get_config()
+
+    def rebuild_menu(icon: Icon) -> None:
+        try:
+            icon.menu = build_tray_menu(app)
+            icon.update_menu()
+        except Exception as e:
+            log(f"tray menu rebuild failed: {e}")
 
     def set_and(**kwargs: Any) -> Callable:
         def handler(icon: Icon, _item: MenuItem) -> None:
             app.update_config(**kwargs)
             if "on_top" in kwargs:
-                app.apply_on_top()
+                app.enqueue("on_top")
             if "fit_work_area" in kwargs or "display_index" in kwargs:
-                app.apply_geometry()
+                app.enqueue("geometry")
             if "scrolling_enabled" in kwargs or "show_scrollbars" in kwargs:
-                app.apply_scroll_policy()
+                app.enqueue("scroll")
             if "refresh_enabled" in kwargs or "refresh_interval_seconds" in kwargs:
-                app._arm_refresh_deadline()
+                # Arm on backend via a no-op refresh deadline update
+                app.enqueue("update_title")  # cheap; deadline armed below
+                # Arm deadline immediately (config only, no webview)
+                cfg_now = app.get_config()
+                if cfg_now.refresh_enabled and cfg_now.refresh_interval_seconds > 0:
+                    app._refresh_deadline = (
+                        time.monotonic() + cfg_now.refresh_interval_seconds
+                    )
+                else:
+                    app._refresh_deadline = 0.0
             if "frameless" in kwargs or "resizable" in kwargs or "allow_move" in kwargs:
                 app._notify("Saved. Restart the app to apply this window option.")
-            try:
-                icon.menu = build_tray_menu(app)
-                icon.update_menu()
-            except Exception:
-                pass
+            rebuild_menu(icon)
 
         return handler
 
@@ -389,11 +507,9 @@ def build_tray_menu(app: App) -> Menu:
         return lambda _item: bool(getattr(cfg(), field))
 
     def display_items() -> Tuple[MenuItem, ...]:
-        """Built when the Display submenu opens — always reflects live monitors."""
         mons = get_monitors()
         if not mons:
             return (MenuItem("No monitors found", None, enabled=False),)
-
         items: List[MenuItem] = []
         for m in mons:
             items.append(
@@ -431,6 +547,7 @@ def build_tray_menu(app: App) -> Menu:
 
     def on_set_url(icon: Icon, _item: MenuItem) -> None:
         current = cfg().url
+
         def worker() -> None:
             new_url = prompt_for_url(current)
             if new_url is None:
@@ -439,22 +556,18 @@ def build_tray_menu(app: App) -> Menu:
             if not new_url:
                 app._notify("URL was empty; not changed.")
                 return
-            app.set_url_and_load(new_url)
+            app.enqueue("set_url", url=new_url)
             app._notify("URL updated")
-            try:
-                icon.menu = build_tray_menu(app)
-                icon.update_menu()
-            except Exception:
-                pass
+            rebuild_menu(icon)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def on_refresh_now(_icon: Icon, _item: MenuItem) -> None:
-        app.refresh_now()
+        app.enqueue("refresh")
 
     def on_reapply_layout(_icon: Icon, _item: MenuItem) -> None:
-        app.apply_geometry()
-        app.apply_scroll_policy()
+        app.enqueue("geometry")
+        app.enqueue("scroll")
         app._notify("Layout re-applied")
 
     def on_show_url(_icon: Icon, _item: MenuItem) -> None:
@@ -466,7 +579,7 @@ def build_tray_menu(app: App) -> Menu:
             if sys.platform == "win32":
                 import os
 
-                os.startfile(str(BASE_DIR))  # noqa: S606 — local folder only
+                os.startfile(str(BASE_DIR))  # noqa: S606
         except Exception as e:
             log(f"open folder failed: {e}")
 
@@ -477,7 +590,10 @@ def build_tray_menu(app: App) -> Menu:
                 w.destroy()
         except Exception:
             pass
-        icon.stop()
+        try:
+            icon.stop()
+        except Exception:
+            pass
 
     url_preview = cfg().url or "(not set)"
     if len(url_preview) > 42:
@@ -541,10 +657,10 @@ def build_tray_menu(app: App) -> Menu:
         MenuItem("Quit", on_quit),
     )
 
+
 def start_tray(app: App) -> None:
     try:
         menu = build_tray_menu(app)
-        # Unique icon name per screen helps Windows keep instances distinct
         icon_name = f"DesktopPlus-S{app.screen_number()}"
         icon = Icon(icon_name, get_tray_image(), app.tray_label(), menu)
         app.icon = icon
@@ -554,8 +670,13 @@ def start_tray(app: App) -> None:
         log(f"tray failed: {e}\n{traceback.format_exc()}")
         show_error(f"System tray failed to start:\n{e}")
 
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main() -> int:
-    log(f"=== {APP_NAME} starting ===")
+    log(f"=== {APP_NAME} v{__version__} starting ===")
     log(f"python={sys.executable}")
     log(f"version={sys.version}")
     log(f"script={Path(__file__).resolve()}")
@@ -605,8 +726,9 @@ def main() -> int:
     start_url = cfg.url
 
     try:
-        # Initial title includes screen; page title is filled in after load
-        initial_title = f"{APP_NAME} | Screen {clamp_display_index(cfg.display_index, mons) + 1}"
+        initial_title = (
+            f"{APP_NAME} | Screen {clamp_display_index(cfg.display_index, mons) + 1}"
+        )
         window = webview.create_window(
             initial_title,
             start_url,
@@ -628,9 +750,8 @@ def main() -> int:
     app.window = window
 
     def _on_shown() -> None:
-        # Critical: place with real virtual-screen coordinates (not DPI-skewed).
         apply_window_chrome_tweaks(window)
-        app.apply_geometry()
+        app.enqueue("geometry")
 
     try:
         window.events.shown += _on_shown
@@ -658,6 +779,7 @@ def main() -> int:
 
     return 0
 
+
 if __name__ == "__main__":
     try:
         sys.exit(main())
@@ -668,4 +790,3 @@ if __name__ == "__main__":
         log(tb)
         show_error(f"Unexpected error:\n{tb[-1500:]}")
         sys.exit(1)
-
