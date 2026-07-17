@@ -1,19 +1,35 @@
 # DesktopPlus
 
-**DesktopPlus** Turn any website into a clean, borderless desktop window. Fixed position • Auto-refresh • System tray controls • Multi-monitor support. (100% Free)
+**DesktopPlus** shows your Home Assistant dashboard (or any web page) on one of your computer screens.
 
 It is meant to look like a **live desktop background**:
 
 - Fills the screen you choose  
-- Leaves the Windows taskbar visible, or you can choose kiosk mode if you want it to go full screen.
+- Leaves the Windows taskbar visible (when that screen has one)  
 - Still clickable and fully usable  
-- Does **not** stay stuck on top of other programs unless you want it to.  
+- Does **not** stay stuck on top of other programs  
 
-**Current version: 2.0**  
+**Current version: 2.1.1**  
 **Works on:** Windows 10 and Windows 11  
 **Cost:** Free  
 
+**Upgrading from 2.0 or 2.1:** put the new files in your existing folder **or** copy your old `config.json` into the new folder. Your dashboard URL stays in that file — you should **not** need to type it again.
+
 Project page: https://github.com/codemonkey2k5/HomeAssistant-DesktopPlus  
+
+---
+
+## What’s new (2.1.1)
+
+1. Refresh now works reliably.  
+2. Fixed the tray icon freezing or becoming unresponsive.  
+3. Fixed the dashboard sometimes looking shifted or scrolled after a refresh.  
+4. The window no longer jumps in front of other programs when it reloads or repositions.  
+5. Log files are cleaned up automatically so they do not grow forever.  
+6. Same features as version 2.0.  
+7. Upgrading keeps your saved URL if you keep or copy `config.json`.  
+
+More history: see **CHANGELOG.md**.
 
 ---
 
@@ -179,7 +195,7 @@ Version **2.0** is a new folder with several files and a tray menu. You do **not
 
 1. **Close** the old program if it is running  
    - Close the dashboard window, or end it from Task Manager if needed.  
-2. **Optional but a good idea:** Copy your old file somewhere safe as a backup  
+2. **Optional but smart:** Copy your old file somewhere safe as a backup  
    - Example: copy `HAD-PLus.pyw` to a folder named `DesktopPlus-backup`.  
 3. Download **version 2.0** the same way as **Install → Step 1** (new folder, extract the zip).  
 4. Do **Install → Step 2** only if Python is not installed yet.  
@@ -281,6 +297,16 @@ If you can, attach a screenshot and the text from `desktopplus.log` or `run_debu
 | **tray_icon.png** | Optional | Icon picture (also auto-created) |
 | **config.json** | Created automatically | Your personal settings (URL, screen, etc.) |
 | **desktopplus.log** | Created automatically | Error log |
+
+---
+
+# Version
+
+**2.1.1** — Reliability release (same features as 2.0). See “What’s new” above.
+
+**2.0** — Full rewrite with tray, multi-monitor, and work-area mode.
+
+**1.0** — Original simple script (`HAD-PLus.pyw`).
 
 ---
 
