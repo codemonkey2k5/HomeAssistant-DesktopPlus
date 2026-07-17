@@ -1,39 +1,51 @@
 """
 DesktopPlus — desktop dashboard panel for Windows (Home Assistant friendly, any URL).
 
-Public-friendly desktop panel:
-- Pick any monitor (1..N); sizes/positions come from Windows work area APIs
-- Normal mode keeps the taskbar visible; kiosk mode fills the full monitor
-- System tray for URL, display, refresh, scroll, and window options
-- Free stack: pywebview + pystray + Pillow + Win32
-
-Double-click this .pyw file (or run with python/pythonw).
-Errors are written to desktopplus.log and shown in a message box.
+Version 2.1.1: reliability hardening for long unattended runs.
+Feature set unchanged from 2.0.
 """
 
 from __future__ import annotations
 
 import json
 import sys
-import threading
 import time
-import traceback
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.json"
 LOG_PATH = BASE_DIR / "desktopplus.log"
+LOG_BACKUP_PATH = BASE_DIR / "desktopplus.log.1"
 ICON_PATH = BASE_DIR / "tray_icon.png"
 
 DEFAULT_URL = ""
 APP_NAME = "DesktopPlus"
-__version__ = "2.0"
+__version__ = "2.1.1"
+
+# Max log size before rotation (one backup kept).
+LOG_MAX_BYTES = 2 * 1024 * 1024
+
+# Outward overscan for mixed-DPI hairlines (unchanged from 2.0).
+EDGE_OVERSCAN_PX = 2
+
+REFRESH_INTERVAL_CHOICES = (300, 600, 900, 1800, 3600)
+
+# ---------------------------------------------------------------------------
+# Logging (rotated — safe for months-long runs)
+# ---------------------------------------------------------------------------
 
 def log(message: str) -> None:
     line = f"{time.strftime('%Y-%m-%d %H:%M:%S')}  {message}"
     try:
+        if LOG_PATH.exists() and LOG_PATH.stat().st_size >= LOG_MAX_BYTES:
+            try:
+                if LOG_BACKUP_PATH.exists():
+                    LOG_BACKUP_PATH.unlink()
+                LOG_PATH.replace(LOG_BACKUP_PATH)
+            except Exception:
+                pass
         with LOG_PATH.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
@@ -42,6 +54,7 @@ def log(message: str) -> None:
         print(line)
     except Exception:
         pass
+
 
 def show_error(message: str, title: str = f"{APP_NAME} — Error") -> None:
     log(f"ERROR: {message}")
@@ -55,6 +68,7 @@ def show_error(message: str, title: str = f"{APP_NAME} — Error") -> None:
             pass
     print(message, file=sys.stderr)
 
+
 def show_info(message: str, title: str = APP_NAME) -> None:
     log(f"INFO: {message}")
     if sys.platform == "win32":
@@ -66,6 +80,11 @@ def show_info(message: str, title: str = APP_NAME) -> None:
         except Exception:
             pass
     print(message)
+
+
+# ---------------------------------------------------------------------------
+# DPI awareness (Windows) — before geometry queries
+# ---------------------------------------------------------------------------
 
 if sys.platform == "win32":
     try:
@@ -81,10 +100,11 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+
 try:
     import webview
-    from PIL import Image, ImageDraw
-    from pystray import Icon, Menu, MenuItem
+    from PIL import Image, ImageDraw  # noqa: F401 — used by UI module import chain
+    from pystray import Icon, Menu, MenuItem  # noqa: F401
 except ImportError as exc:
     show_error(
         "Missing Python package required to run this app.\n\n"
@@ -98,21 +118,24 @@ except ImportError as exc:
     )
     sys.exit(1)
 
-REFRESH_INTERVAL_CHOICES = (300, 600, 900, 1800, 3600)
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
 
 @dataclass
 class AppConfig:
     url: str = DEFAULT_URL
     display_index: int = 0
-    fit_work_area: bool = True  # True = normal (taskbar visible), False = kiosk
+    fit_work_area: bool = True
     refresh_enabled: bool = True
-    refresh_interval_seconds: int = 600  # 10 minutes
+    refresh_interval_seconds: int = 600
     scrolling_enabled: bool = False
     show_scrollbars: bool = False
     frameless: bool = True
     resizable: bool = False
     on_top: bool = False
-    allow_move: bool = False  # frameless drag; applies on next launch
+    allow_move: bool = False
     private_mode: bool = False
     window_title: str = APP_NAME
 
@@ -130,6 +153,7 @@ class AppConfig:
         else:
             cfg.url = DEFAULT_URL
         return cfg
+
 
 def load_config() -> AppConfig:
     if not CONFIG_PATH.exists():
@@ -150,12 +174,29 @@ def load_config() -> AppConfig:
         save_config(cfg)
         return cfg
 
+
 def save_config(cfg: AppConfig) -> None:
+    """Atomic write so a crash mid-save cannot wipe an existing config (keeps URL on upgrade)."""
     try:
-        with CONFIG_PATH.open("w", encoding="utf-8") as f:
-            json.dump(asdict(cfg), f, indent=2)
+        tmp_path = CONFIG_PATH.with_suffix(".json.tmp")
+        data = json.dumps(asdict(cfg), indent=2)
+        with tmp_path.open("w", encoding="utf-8") as f:
+            f.write(data)
+            f.flush()
+        tmp_path.replace(CONFIG_PATH)
     except Exception as e:
         log(f"config save failed: {e}")
+        try:
+            tmp_path = CONFIG_PATH.with_suffix(".json.tmp")
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Monitors / work area
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class MonitorInfo:
@@ -179,14 +220,15 @@ class MonitorInfo:
         role = "Primary" if self.is_primary else "Display"
         tb = " · taskbar" if self.has_taskbar_inset else ""
         return (
-            f"{self.index + 1}: {role} {self.mon_w}×{self.mon_h}"
-            f" (work {self.work_w}×{self.work_h}){tb}"
+            f"{self.index + 1}: {role} {self.mon_w}x{self.mon_h}"
+            f" (work {self.work_w}x{self.work_h}){tb}"
         )
 
     def geometry(self, fit_work_area: bool) -> Tuple[int, int, int, int]:
         if fit_work_area:
             return self.work_x, self.work_y, self.work_w, self.work_h
         return self.mon_x, self.mon_y, self.mon_w, self.mon_h
+
 
 def get_monitors() -> List[MonitorInfo]:
     """Enumerate all displays via Windows APIs (any count/size/arrangement)."""
@@ -281,8 +323,8 @@ def get_monitors() -> List[MonitorInfo]:
         )
     return monitors
 
+
 def _default_display_index(mons: Sequence[MonitorInfo]) -> int:
-    """Pick a sensible first-run screen without hard-coding coordinates."""
     if not mons:
         return 0
     for m in mons:
@@ -290,10 +332,12 @@ def _default_display_index(mons: Sequence[MonitorInfo]) -> int:
             return m.index
     return 0
 
+
 def clamp_display_index(index: int, mons: Sequence[MonitorInfo]) -> int:
     if not mons:
         return 0
     return max(0, min(int(index), len(mons) - 1))
+
 
 def resolve_geometry(cfg: AppConfig) -> Tuple[int, int, int, int, MonitorInfo]:
     mons = get_monitors()
@@ -307,12 +351,9 @@ def resolve_geometry(cfg: AppConfig) -> Tuple[int, int, int, int, MonitorInfo]:
         x, y, w, h = mon.geometry(False)
     return x, y, w, h, mon
 
+
 def primary_scale_factor() -> float:
-    """
-    Primary monitor scale as used by pywebview on Windows (EdgeChromium).
-    pywebview multiplies create/move X,Y by this value — which breaks multi-monitor
-    setups when monitors use different DPI (e.g. 175% primary + 100% secondary).
-    """
+    """Primary monitor scale (pywebview multiplies create_window x/y by this on Windows)."""
     if sys.platform != "win32":
         return 1.0
     try:
@@ -322,18 +363,16 @@ def primary_scale_factor() -> float:
     except Exception:
         return 1.0
 
+
 def pywebview_create_xy(x: int, y: int) -> Tuple[int, int]:
-    """
-    Convert real virtual-screen coordinates into values for webview.create_window(x=, y=).
-    pywebview will multiply them by primary_scale_factor() again on Windows.
-    """
+    """Pre-divide coords so pywebview's primary-DPI multiply lands correctly."""
     sf = primary_scale_factor()
     if sf <= 0:
         sf = 1.0
     return int(round(x / sf)), int(round(y / sf))
 
+
 def _window_hwnd(window: Any) -> Optional[int]:
-    """Return the Win32 HWND for a pywebview window, if available."""
     native = getattr(window, "native", None)
     if native is None:
         return None
@@ -345,15 +384,9 @@ def _window_hwnd(window: Any) -> Optional[int]:
     except Exception:
         return None
 
-EDGE_OVERSCAN_PX = 2
 
 def apply_window_chrome_tweaks(window: Any) -> None:
-    """
-    Remove visual insets that leave desktop visible around a frameless panel:
-    - Windows 11 rounded corners
-    - DWM border color
-    - WinForms padding
-    """
+    """Remove rounded corners / DWM border insets on frameless panel windows."""
     if sys.platform != "win32":
         return
     import ctypes
@@ -369,7 +402,7 @@ def apply_window_chrome_tweaks(window: Any) -> None:
         except Exception:
             pass
         try:
-            native.AutoScaleMode = 0  # AutoScaleMode.None
+            native.AutoScaleMode = 0  # None
         except Exception:
             pass
 
@@ -402,14 +435,21 @@ def apply_window_chrome_tweaks(window: Any) -> None:
     except Exception:
         pass
 
-def set_native_bounds(window: Any, x: int, y: int, w: int, h: int) -> bool:
+
+def set_native_bounds(
+    window: Any,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    *,
+    activate: bool = False,
+) -> bool:
     """
     Place the window using real virtual-screen pixels (Win32 SetWindowPos).
 
-    Do NOT use window.move() for multi-monitor placement on Windows: pywebview
-    multiplies x/y by the *primary* DPI scale factor, which can throw the window
-    completely off-screen when the target monitor is at 100% and the primary is not
-    (common with a 4K main display + 1080p secondary).
+    activate=False (default): do not BringToFront / force refresh — critical for a
+    desktop-background style panel and for reducing GPU/focus thrash after refresh.
     """
     x, y, w, h = int(x), int(y), int(w), int(h)
 
@@ -440,10 +480,17 @@ def set_native_bounds(window: Any, x: int, y: int, w: int, h: int) -> bool:
     native = getattr(window, "native", None)
 
     SWP_NOZORDER = 0x0004
+    SWP_NOACTIVATE = 0x0010
     SWP_SHOWWINDOW = 0x0040
     SWP_FRAMECHANGED = 0x0020
     SWP_NOCOPYBITS = 0x0100
-    flags = SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOCOPYBITS
+
+    flags = SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOCOPYBITS
+    if activate:
+        flags |= SWP_SHOWWINDOW
+    else:
+        # Place without activating / stealing focus
+        flags |= SWP_NOACTIVATE | SWP_SHOWWINDOW
 
     def _apply() -> None:
         apply_window_chrome_tweaks(window)
@@ -456,13 +503,19 @@ def set_native_bounds(window: Any, x: int, y: int, w: int, h: int) -> bool:
                 pass
 
         if hwnd:
-            ctypes.windll.user32.SetLastError(0)
+            try:
+                ctypes.windll.kernel32.SetLastError(0)
+            except Exception:
+                pass
             ok = ctypes.windll.user32.SetWindowPos(hwnd, 0, x, y, w, h, flags)
             if not ok:
-                err = ctypes.get_last_error()
+                try:
+                    err = ctypes.get_last_error()
+                except Exception:
+                    err = "?"
                 log(f"SetWindowPos failed last_error={err} hwnd={hwnd} {x},{y} {w}x{h}")
             else:
-                log(f"SetWindowPos ok hwnd={hwnd} {x},{y} {w}x{h} (overscan={pad})")
+                log(f"SetWindowPos ok hwnd={hwnd} {x},{y} {w}x{h} activate={activate}")
 
             try:
                 if native is not None and native.Controls.Count > 0:
@@ -472,17 +525,16 @@ def set_native_bounds(window: Any, x: int, y: int, w: int, h: int) -> bool:
                             ctrl.Top = 0
                             ctrl.Width = native.ClientSize.Width
                             ctrl.Height = native.ClientSize.Height
-                            ctrl.Dock = 5  # DockStyle.Fill
+                            ctrl.Dock = 5  # Fill
                         except Exception:
                             pass
             except Exception as e:
                 log(f"child fill tweak failed: {e}")
 
-        if native is not None:
+        if native is not None and activate:
             try:
                 native.Show()
                 native.BringToFront()
-                native.Refresh()
             except Exception:
                 pass
 
@@ -509,6 +561,11 @@ def set_native_bounds(window: Any, x: int, y: int, w: int, h: int) -> bool:
             except Exception as e3:
                 log(f"set_native_bounds ultimate fallback failed: {e3}")
                 return False
+
+
+# ---------------------------------------------------------------------------
+# URL dialog
+# ---------------------------------------------------------------------------
 
 def prompt_for_url(current: str, title: str = "Dashboard URL") -> Optional[str]:
     """Show a small dialog to enter/change the start URL. Returns None if cancelled."""
@@ -543,6 +600,7 @@ def prompt_for_url(current: str, title: str = "Dashboard URL") -> Optional[str]:
         return None
     return result.strip()
 
+
 def normalize_url(url: str) -> str:
     url = (url or "").strip()
     if not url:
@@ -550,6 +608,11 @@ def normalize_url(url: str) -> str:
     if "://" not in url:
         url = "http://" + url
     return url
+
+
+# ---------------------------------------------------------------------------
+# Scroll / page alignment helpers
+# ---------------------------------------------------------------------------
 
 def build_scroll_css(cfg: AppConfig) -> str:
     parts: List[str] = []
@@ -570,6 +633,7 @@ def build_scroll_css(cfg: AppConfig) -> str:
             """
         )
     return "\n".join(parts)
+
 
 def build_scroll_js(cfg: AppConfig) -> str:
     scroll_on = "true" if cfg.scrolling_enabled else "false"
@@ -604,3 +668,45 @@ def build_scroll_js(cfg: AppConfig) -> str:
         style.textContent = css;
     }})();
     """
+
+
+def build_reset_scroll_js() -> str:
+    """
+    Force page content to top-left after reload.
+    Bounded work only — no MutationObservers, no deep infinite walks.
+    """
+    return """
+    (function() {
+        try {
+            window.scrollTo(0, 0);
+            if (document.documentElement) {
+                document.documentElement.scrollTop = 0;
+                document.documentElement.scrollLeft = 0;
+            }
+            if (document.body) {
+                document.body.scrollTop = 0;
+                document.body.scrollLeft = 0;
+            }
+            // Best-effort: a few common scroll containers (Home Assistant panels)
+            var sel = 'ha-app-layout, #view, [scroller], .scroll, main, ion-content';
+            var nodes = document.querySelectorAll(sel);
+            var n = Math.min(nodes.length, 40);
+            for (var i = 0; i < n; i++) {
+                try {
+                    nodes[i].scrollTop = 0;
+                    nodes[i].scrollLeft = 0;
+                } catch (e) {}
+            }
+        } catch (e) {}
+    })();
+    """
+
+
+def reset_page_scroll(window: Any) -> None:
+    """Reset document scroll after navigation/refresh."""
+    if window is None:
+        return
+    try:
+        window.evaluate_js(build_reset_scroll_js())
+    except Exception as e:
+        log(f"reset_page_scroll failed: {e}")
