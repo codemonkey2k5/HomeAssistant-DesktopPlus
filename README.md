@@ -1,21 +1,19 @@
 # DesktopPlus
 
-**DesktopPlus** shows your Home Assistant dashboard (or any web page) on one of your computer screens.
+DesktopPlus shows your Home Assistant dashboard (or any web page) on one or more of your computer screens.
 
 It is meant to look like a **live desktop background**:
+- Displays the screen you choose. 
+- Leaves the Windows taskbar visible (when that screen has one or when in kiosk mode)  
+- The displayed website is still fully functional.
+- Does not stay stuck on top of other programs (unless you turn on Always on top)  
 
-- Fills the screen you choose  
-- Leaves the Windows taskbar visible (when that screen has one)  
-- Still clickable and fully usable  
-- Does **not** stay stuck on top of other programs (unless you turn on Always on top)  
-- **No DesktopPlus button on the Windows taskbar** — use the **system tray** icon only  
-
-**Current version: 2.2.0**  
-**Works on:** Windows 10 and Windows 11  
-**Cost:** Free  
+Current version: 2.2.0 
+Works on: Windows 10 and Windows 11  
+  
 
 **Upgrading from 2.0 / 2.1 / 2.1.1:**  
-Download the new **DesktopPlus.exe**, put it in your folder, and **keep your old `config.json`** next to it. Your dashboard URL stays in that file — you should **not** need to type it again.
+Download the new DesktopPlus.exe, put it in your folder, and keep your old `config.json` next to it. Your dashboard URL stays in that file — you should not need to type it again.
 
 Project page: https://github.com/codemonkey2k5/HomeAssistant-DesktopPlus  
 
@@ -23,15 +21,12 @@ Project page: https://github.com/codemonkey2k5/HomeAssistant-DesktopPlus
 
 ## What’s new (2.2.0)
 
-1. **No Python install** — download one program file and run it.  
-2. **No button on the Windows taskbar** — use the small tray icon near the clock.  
-3. **Start on login** — a tray checkbox starts DesktopPlus when you sign in to Windows.  
-4. **Help…** and **About…** in the tray menu, with multi-screen instructions.  
-5. Works with **any web address**, not only Home Assistant (for example `google.com` or your dashboard).  
-6. Clearer tray menu; improved icon for shortcuts.  
-7. Tray settings that do not need a restart apply right away (including a page reload when needed).  
-8. Built on the reliability work from version 2.1.1 (refresh, tray, layout, log cleanup).  
-9. Upgrading keeps your saved URL if you keep (or copy) `config.json` — no need to type it again.  
+1. Removed Python install requirement.  
+2. Removed icon from task bar unless tray menu is open.  Opens to the system tray. "The small tray icon near the clock".  
+3. Added Start on login.  
+4. Added Help and about to the tray menu.    
+5. Clearer tray menu; improved icon for shortcuts.  
+6. Tray settings that do not need a restart apply right away (including a page reload when needed).    
 
 More history: see **CHANGELOG.md**.
 
@@ -41,39 +36,35 @@ More history: see **CHANGELOG.md**.
 
 ### Do I need Python?
 
-**No.** Version 2.2 is a single **DesktopPlus.exe**. Double-click it and go.
+No. Version 2.2 is a single DesktopPlus.exe. Double-click it and go.
 
 ### What is `.gitignore`?
 
-You can **ignore this file** for day-to-day use. You never open it to run DesktopPlus.
+You can ignore this file for day-to-day use. You never open it to run DesktopPlus.
 
 It is only for people who put the project on GitHub (or use git). It tells git:  
 “Don’t upload my personal settings or log files.”
 
-**Beginners:** leave `.gitignore` in the folder (if you have one) and don’t worry about it.
+Beginners: leave `.gitignore` in the folder (if you have one) and don’t worry about it.
 
 ### Where is the tray icon?
 
-The tray icon is the small picture near the **clock** (bottom-right of Windows). If you don’t see it, click the **^** arrow to show hidden icons.
+The tray icon is the small picture near the clock (bottom-right of Windows). If you don’t see it, click the "^" arrow to show hidden icons.
 
 ---
 
 ## What you need before installing
 
-1. A **Windows 10 or Windows 11** computer  
-2. Your **Home Assistant address** (or any website address you want on the screen)  
+1. A Windows 10 or Windows 11 computer  
+2. The URL of a website that you want on the screen.    
    Example shape (yours will be different):  
-   `http://homeassistant.local:8123/lovelace/0`  
-3. A few minutes  
-
-You do **not** need to know how to program.  
-You do **not** need to install Python.
+   `https://homeassistant.local:8123`  
 
 ---
 
 # Install (new users — start here)
 
-Follow these steps **in order**.
+Follow these steps in order.
 
 ---
 
@@ -106,12 +97,12 @@ https://example.com
    - You can leave off `http://` — if you type something like `google.com`, DesktopPlus adds `http://` for you.  
    - Prefer `https://` when the site needs it.  
 
-4. Click **OK**.  
+4. Click OK.  
 5. A window should open with your page.  
 6. Look near the Windows clock for the DesktopPlus tray icon.  
-   - Click **^** if icons are hidden.
+   - Click "^" if icon is hidden.
 
-**Tip:** Your settings are saved in a file named **`config.json`** in the same folder. It is created automatically. The log file is **`desktopplus.log`** (it stays small and cleans itself up).
+**Tip:** Your settings are saved in a file named **`config.json`** in the same folder you put the exe file into. It is created automatically. The log file is **`desktopplus.log`** (it stays small and cleans itself up).
 
 ---
 
@@ -171,14 +162,6 @@ Each running DesktopPlus controls **one** screen (one panel + one tray icon).
 5. Each folder gets its own `config.json`, so they do not overwrite each other.  
 6. Turn on **Start on login** in each copy if you want both to start at sign-in.
 
-### Advanced — one folder, two config files
-
-```text
-DesktopPlus.exe --config config-screen2.json
-```
-
-Do **not** run two copies that both use the same `config.json`.
-
 ---
 
 # Using the tray menu (after it is running)
@@ -193,7 +176,7 @@ Do **not** run two copies that both use the same `config.json`.
 | **Auto-refresh** | Turn timed reload on/off |
 | **Refresh interval** | How often it reloads (5 / 10 / 15 / 30 / 60 minutes) |
 | **Display** | Which monitor to use |
-| **Fit work area (normal mode)** | On = leave taskbar; Off = full monitor kiosk |
+| **Fit work area (normal mode)** | On = leave taskbar; Off = full monitor "kiosk" |
 | **Scrolling / scrollbars** | Allow or block page scrolling |
 | **Frameless / Resizable / Allow move** | Window border and drag options (**restart required**) |
 | **Always on top** | Keep above other windows (usually leave **off**) |
@@ -225,11 +208,6 @@ On many Windows 11 PCs it is already installed.
 ### Wrong screen / window off-screen
 
 Tray icon → **Display** → pick the correct screen → **Re-apply layout**.
-
-### I moved only the .exe and it used to need a big folder
-
-Version **2.2** is a **single file**. You no longer need an `_internal` folder or Python files next to it.  
-Keep **DesktopPlus.exe** and (if you have one) **config.json** in the same folder.
 
 ### Still stuck?
 
