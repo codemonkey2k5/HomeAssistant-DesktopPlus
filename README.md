@@ -7,27 +7,31 @@ It is meant to look like a **live desktop background**:
 - Fills the screen you choose  
 - Leaves the Windows taskbar visible (when that screen has one)  
 - Still clickable and fully usable  
-- Does **not** stay stuck on top of other programs  
+- Does **not** stay stuck on top of other programs (unless you turn on Always on top)  
+- **No DesktopPlus button on the Windows taskbar** — use the **system tray** icon only  
 
-**Current version: 2.1.1**  
+**Current version: 2.2.0**  
 **Works on:** Windows 10 and Windows 11  
 **Cost:** Free  
 
-**Upgrading from 2.0 or 2.1:** put the new files in your existing folder **or** copy your old `config.json` into the new folder. Your dashboard URL stays in that file — you should **not** need to type it again.
+**Upgrading from 2.0 / 2.1 / 2.1.1:**  
+Download the new **DesktopPlus.exe**, put it in your folder, and **keep your old `config.json`** next to it. Your dashboard URL stays in that file — you should **not** need to type it again.
 
 Project page: https://github.com/codemonkey2k5/HomeAssistant-DesktopPlus  
 
 ---
 
-## What’s new (2.1.1)
+## What’s new (2.2.0)
 
-1. Refresh now works reliably.  
-2. Fixed the tray icon freezing or becoming unresponsive.  
-3. Fixed the dashboard sometimes looking shifted or scrolled after a refresh.  
-4. The window no longer jumps in front of other programs when it reloads or repositions.  
-5. Log files are cleaned up automatically so they do not grow forever.  
-6. Same features as version 2.0.  
-7. Upgrading keeps your saved URL if you keep or copy `config.json`.  
+1. **No Python install** — download one program file and run it.  
+2. **No button on the Windows taskbar** — use the small tray icon near the clock.  
+3. **Start on login** — a tray checkbox starts DesktopPlus when you sign in to Windows.  
+4. **Help…** and **About…** in the tray menu, with multi-screen instructions.  
+5. Works with **any web address**, not only Home Assistant (for example `google.com` or your dashboard).  
+6. Clearer tray menu; improved icon for shortcuts.  
+7. Tray settings that do not need a restart apply right away (including a page reload when needed).  
+8. Built on the reliability work from version 2.1.1 (refresh, tray, layout, log cleanup).  
+9. Upgrading keeps your saved URL if you keep (or copy) `config.json` — no need to type it again.  
 
 More history: see **CHANGELOG.md**.
 
@@ -35,25 +39,20 @@ More history: see **CHANGELOG.md**.
 
 ## Quick answers
 
+### Do I need Python?
+
+**No.** Version 2.2 is a single **DesktopPlus.exe**. Double-click it and go.
+
 ### What is `.gitignore`?
 
 You can **ignore this file** for day-to-day use. You never open it to run DesktopPlus.
 
 It is only for people who put the project on GitHub (or use git). It tells git:  
-“Don’t upload my personal settings or log files.”  
+“Don’t upload my personal settings or log files.”
 
-Examples of things it keeps private:
+**Beginners:** leave `.gitignore` in the folder (if you have one) and don’t worry about it.
 
-- Your dashboard address (`config.json`)  
-- Log files  
-
-**Beginners:** leave `.gitignore` in the folder and don’t worry about it.
-
-### What about the icons?
-
-DesktopPlus can **create the tray icons automatically** the first time it runs (files named `tray_icon.png` and sometimes `tray_icon_256.png`).
-
-They may also be included in the download. Either way is fine.
+### Where is the tray icon?
 
 The tray icon is the small picture near the **clock** (bottom-right of Windows). If you don’t see it, click the **^** arrow to show hidden icons.
 
@@ -65,15 +64,16 @@ The tray icon is the small picture near the **clock** (bottom-right of Windows).
 2. Your **Home Assistant address** (or any website address you want on the screen)  
    Example shape (yours will be different):  
    `http://homeassistant.local:8123/lovelace/0`  
-3. About **10–15 minutes**
+3. A few minutes  
 
-You do **not** need to know how to program.
+You do **not** need to know how to program.  
+You do **not** need to install Python.
 
 ---
 
 # Install (new users — start here)
 
-Follow these steps **in order**. Do not skip steps.
+Follow these steps **in order**.
 
 ---
 
@@ -81,87 +81,41 @@ Follow these steps **in order**. Do not skip steps.
 
 1. Open this page in your web browser:  
    https://github.com/codemonkey2k5/HomeAssistant-DesktopPlus/releases  
-2. Click the latest release (for example **DesktopPlus v2.0**).  
-3. Under **Assets**, download the **Source code (zip)** file.  
-   (If you only see a green **Code** button on the main page, click it → **Download ZIP**.)  
-4. Find the downloaded zip (usually in your **Downloads** folder).  
-5. **Right-click** the zip → **Extract All…** → choose a simple folder, for example:  
+2. Click the latest release (**DesktopPlus v2.2.0**).  
+3. Under **Assets**, download **`DesktopPlus.exe`**.  
+4. Create a simple folder, for example:  
    `C:\DesktopPlus`  
-6. Click **Extract**.
+5. Move **DesktopPlus.exe** into that folder.
 
-You should now have a folder that contains at least these files **together**:
-
-- `DesktopPlus.pyw`  
-- `desktopplus_core.py`  
-- `desktopplus_ui.py`  
-- `requirements.txt`  
-- `run_debug.bat`  
-
-**Important:** Keep those files in the **same folder**. Do not separate them.
+That’s it for files. You only need the one program file to start.
 
 ---
 
-### Step 2 — Install Python (the free tool that runs DesktopPlus)
+### Step 2 — Start DesktopPlus
 
-DesktopPlus is a small program written in Python. Windows needs Python installed first.
-
-1. Open: https://www.python.org/downloads/  
-2. Click the big yellow button to download Python (any **3.11**, **3.12**, or **3.13** is fine).  
-3. Open the installer you downloaded.  
-4. **Very important:** On the first screen, turn **ON** the box that says something like:  
-   **“Add python.exe to PATH”**  
-   (If you skip this, the next steps often fail.)  
-5. Click **Install Now**.  
-6. When it finishes, click **Close**.  
-7. **Restart your computer** (recommended so Windows fully sees Python).
-
----
-
-### Step 3 — Install the free helper packages
-
-These are free add-ons Python needs (browser window, tray icon, images).
-
-1. Open the folder where you extracted DesktopPlus (example: `C:\DesktopPlus`).  
-2. Click once in the **address bar** at the top of File Explorer (where the folder path is shown).  
-3. Type `cmd` and press **Enter**.  
-   - A black window opens. That is the “Command Prompt.”  
-   - It should already be “inside” your DesktopPlus folder.  
-4. Copy this line **exactly**, paste it into the black window, then press **Enter**:
-
-```text
-py -m pip install -r requirements.txt
-```
-
-5. Wait until it finishes (you should get the blinking cursor back with no long red error).  
-
-**If that line fails**, try this instead, then press Enter:
-
-```text
-python -m pip install -r requirements.txt
-```
-
-**If you still get errors**, copy everything from the black window and ask for help (or open an Issue on the GitHub page).
-
----
-
-### Step 4 — Start DesktopPlus
-
-1. In your DesktopPlus folder, double-click **`DesktopPlus.pyw`**.  
+1. Double-click **`DesktopPlus.exe`**.  
 2. The first time, a small box should ask for a **URL** (web address).  
-3. Type or paste your Home Assistant dashboard address, for example:
+3. Type or paste your address. Examples:
 
 ```text
 http://homeassistant.local:8123/lovelace/0
+google.com
+https://example.com
 ```
 
+   - You can leave off `http://` — if you type something like `google.com`, DesktopPlus adds `http://` for you.  
+   - Prefer `https://` when the site needs it.  
+
 4. Click **OK**.  
-5. A window should open with your dashboard.  
-6. Look near the Windows clock for the DesktopPlus tray icon (monitor with colored tiles).  
+5. A window should open with your page.  
+6. Look near the Windows clock for the DesktopPlus tray icon.  
    - Click **^** if icons are hidden.
+
+**Tip:** Your settings are saved in a file named **`config.json`** in the same folder. It is created automatically. The log file is **`desktopplus.log`** (it stays small and cleans itself up).
 
 ---
 
-### Step 5 — Put it on the correct screen (if you have more than one)
+### Step 3 — Put it on the correct screen (if you have more than one)
 
 1. **Right-click** the DesktopPlus tray icon.  
 2. Open **Display**.  
@@ -174,50 +128,56 @@ http://homeassistant.local:8123/lovelace/0
 
 ---
 
-### Step 6 — Optional: start automatically when Windows starts
+### Step 4 — Optional: start automatically when Windows starts
 
-1. Right-click `DesktopPlus.pyw`  
-2. Click **Show more options** (Windows 11) if needed  
-3. Click **Send to** → **Desktop (create shortcut)**  
-4. Press **Windows key + R**, type `shell:startup`, press **Enter**  
-5. Drag the DesktopPlus shortcut from your Desktop into that Startup folder  
-
-Now DesktopPlus can start when you sign in to Windows.
+1. Right-click the DesktopPlus tray icon.  
+2. Check **Start on login**.  
+3. Uncheck anytime to remove it from startup.
 
 ---
 
-# Upgrade from version 1.0 (people who already used the old program)
+# Upgrade from an older version
 
-Version **1.0** was a single file (often named something like **`HAD-PLus.pyw`**).  
-Version **2.0** is a new folder with several files and a tray menu. You do **not** edit coordinates by hand anymore.
+### From 2.0 / 2.1 / 2.1.1 (Python / script version)
 
-### Upgrade steps (safe)
+1. **Quit** the old DesktopPlus if it is running.  
+2. Download **DesktopPlus.exe** from the new release (Install → Step 1).  
+3. Put **DesktopPlus.exe** in a folder (a new folder or your old one).  
+4. **Copy your old `config.json`** into the same folder as the new exe (if you still have it).  
+5. Double-click **DesktopPlus.exe**.  
+6. You should **not** need to type your URL again if `config.json` came along.  
+7. You can stop using the old `.pyw` files and Python install steps for DesktopPlus.
 
-1. **Close** the old program if it is running  
-   - Close the dashboard window, or end it from Task Manager if needed.  
-2. **Optional but smart:** Copy your old file somewhere safe as a backup  
-   - Example: copy `HAD-PLus.pyw` to a folder named `DesktopPlus-backup`.  
-3. Download **version 2.0** the same way as **Install → Step 1** (new folder, extract the zip).  
-4. Do **Install → Step 2** only if Python is not installed yet.  
-   - If Python already works on your PC, skip to Step 5.  
-5. Do **Install → Step 3** in the **new** DesktopPlus folder  
-   (`py -m pip install -r requirements.txt`).  
-6. Double-click **`DesktopPlus.pyw`** in the **new** folder.  
-7. Enter your dashboard URL when asked (same address you used before is fine).  
-8. Use the tray menu → **Display** to pick your screen (this replaces the old hard-coded position/size).  
-9. When you are happy it works, you can delete or ignore the old `HAD-PLus.pyw`.  
+### From version 1.0
 
-### What changed from 1.0 to 2.0 (plain English)
+Version **1.0** was a single script (often **`HAD-PLus.pyw`**).  
+Use the **Install** steps above for 2.2, then enter your dashboard URL once when asked.  
+Use the tray menu → **Display** to pick your screen (this replaces the old hard-coded position/size).
 
-| Old 1.0 | New 2.0 |
-|--------|---------|
-| One script file | Several files that must stay together |
-| Typed screen position numbers in the file | Choose the screen from the tray menu |
-| Limited options in code | Most options in the tray menu |
-| Refresh often unreliable | Refresh redesigned (default every 10 minutes) |
-| No tray menu | System tray menu for settings |
+---
 
-Your old 1.0 settings inside the old `.pyw` file are **not** copied automatically. You set the URL once in 2.0, then use the tray for the rest.
+# Using more than one screen
+
+Each running DesktopPlus controls **one** screen (one panel + one tray icon).
+
+### Easiest way — two folders
+
+1. Make two folders, for example:  
+   `C:\DesktopPlus-Screen1`  
+   `C:\DesktopPlus-Screen2`  
+2. Put a copy of **DesktopPlus.exe** in each folder.  
+3. Run the first copy → **Display** → Screen 1 → set the URL.  
+4. Run the second copy → **Display** → Screen 2 → set that URL.  
+5. Each folder gets its own `config.json`, so they do not overwrite each other.  
+6. Turn on **Start on login** in each copy if you want both to start at sign-in.
+
+### Advanced — one folder, two config files
+
+```text
+DesktopPlus.exe --config config-screen2.json
+```
+
+Do **not** run two copies that both use the same `config.json`.
 
 ---
 
@@ -229,39 +189,31 @@ Your old 1.0 settings inside the old `.pyw` file are **not** copied automaticall
 |-----------|----------------|
 | **Refresh now** | Reloads the page immediately |
 | **Re-apply layout** | Re-sizes/re-positions to the selected screen |
-| **Set dashboard URL…** | Change the web address |
+| **Set URL…** | Change the web address |
 | **Auto-refresh** | Turn timed reload on/off |
 | **Refresh interval** | How often it reloads (5 / 10 / 15 / 30 / 60 minutes) |
 | **Display** | Which monitor to use |
 | **Fit work area (normal mode)** | On = leave taskbar; Off = full monitor kiosk |
 | **Scrolling / scrollbars** | Allow or block page scrolling |
-| **Frameless / Resizable / Allow move** | Window border and drag options (some need restart) |
-| **Always on top** | Keep above other windows (usually leave **off** for background use) |
-| **Open config folder** | Opens the folder with your settings |
+| **Frameless / Resizable / Allow move** | Window border and drag options (**restart required**) |
+| **Always on top** | Keep above other windows (usually leave **off**) |
+| **Start on login** | Start this copy when you sign in to Windows |
+| **Open config folder** | Opens the folder with your settings and log |
+| **Help…** | Full in-app instructions |
+| **About…** | Version and file paths |
 | **Quit** | Closes DesktopPlus |
+
+Most options apply right away. Only **Frameless**, **Resizable**, and **Allow move** need you to quit and start again.
 
 ---
 
 # If something goes wrong
 
-### Double-click does nothing
+### Double-click does nothing / program won’t start
 
-1. Open the DesktopPlus folder.  
-2. Double-click **`run_debug.bat`**.  
-3. A black window will show messages.  
-4. Read the message:  
-   - If it says a package is missing → repeat **Install Step 3**.  
-   - If it says Python was not found → repeat **Install Step 2** (and check “Add to PATH”).  
-
-Also check for a file named **`desktopplus.log`** in the same folder and open it with Notepad.
-
-### “Missing module” / “No module named webview”
-
-Open Command Prompt **in the DesktopPlus folder** (see Install Step 3) and run:
-
-```text
-py -m pip install -r requirements.txt
-```
+1. Make sure you downloaded **DesktopPlus.exe** from the **Releases** page (not only Source code).  
+2. Try right-click → **Run as administrator** only if your PC policy blocks normal runs (usually not needed).  
+3. Look for **`desktopplus.log`** in the same folder and open it with Notepad.  
 
 ### Blank window or browser error
 
@@ -274,35 +226,36 @@ On many Windows 11 PCs it is already installed.
 
 Tray icon → **Display** → pick the correct screen → **Re-apply layout**.
 
+### I moved only the .exe and it used to need a big folder
+
+Version **2.2** is a **single file**. You no longer need an `_internal` folder or Python files next to it.  
+Keep **DesktopPlus.exe** and (if you have one) **config.json** in the same folder.
+
 ### Still stuck?
 
 Open an Issue here and describe what you clicked and what you saw:  
 https://github.com/codemonkey2k5/HomeAssistant-DesktopPlus/issues  
 
-If you can, attach a screenshot and the text from `desktopplus.log` or `run_debug.bat` (do not share passwords).
+If you can, attach a screenshot and the text from `desktopplus.log` (do not share passwords).
 
 ---
 
-# Files in the folder (what matters to you)
+# Files that matter to you
 
 | File name | Do you need it? | What it is |
 |-----------|-----------------|------------|
-| **DesktopPlus.pyw** | **Yes — double-click this to run** | Starter program |
-| **desktopplus_core.py** | Yes — leave it there | Helper program file |
-| **desktopplus_ui.py** | Yes — leave it there | Helper program file |
-| **requirements.txt** | Yes — used in install Step 3 | List of free packages to install |
-| **run_debug.bat** | Only if something fails | Shows error messages |
-| **README.md** | Optional | These instructions |
-| **.gitignore** | Optional — ignore it | For GitHub only (see above) |
-| **tray_icon.png** | Optional | Icon picture (also auto-created) |
+| **DesktopPlus.exe** | **Yes — double-click this to run** | The program (download from Releases) |
 | **config.json** | Created automatically | Your personal settings (URL, screen, etc.) |
-| **desktopplus.log** | Created automatically | Error log |
+| **desktopplus.log** | Created automatically | Activity / error log (stays small) |
+| **README.md** | Optional | These instructions |
 
 ---
 
 # Version
 
-**2.1.1** — Reliability release (same features as 2.0). See “What’s new” above.
+**2.2.0** — Standalone program, tray-only, Start on login, Help, any URL. See “What’s new” above.
+
+**2.1.1** — Reliability release (Python/script install).
 
 **2.0** — Full rewrite with tray, multi-monitor, and work-area mode.
 
