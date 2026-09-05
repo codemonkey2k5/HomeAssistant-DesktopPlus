@@ -30,6 +30,10 @@ Project page: https://github.com/codemonkey2k5/HomeAssistant-DesktopPlus
 
 More history: see **CHANGELOG.md**.
 
+<img width="3813" height="2154" alt="image" src="https://github.com/user-attachments/assets/bb217af5-d0cd-42a1-a094-68229cc43cfa" />
+
+
+
 ---
 
 ## Quick answers
