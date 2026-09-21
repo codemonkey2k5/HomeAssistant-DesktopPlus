@@ -40,16 +40,7 @@ More history: see **CHANGELOG.md**.
 
 ### Do I need Python?
 
-No. Version 2.2 is a single DesktopPlus.exe. Double-click it and go.
-
-### What is `.gitignore`?
-
-You can ignore this file for day-to-day use. You never open it to run DesktopPlus.
-
-It is only for people who put the project on GitHub (or use git). It tells git:  
-“Don’t upload my personal settings or log files.”
-
-Beginners: leave `.gitignore` in the folder (if you have one) and don’t worry about it.
+No, not anymore. Version 2.2 is a single DesktopPlus.exe. Double-click it and go.
 
 ### Where is the tray icon?
 
@@ -74,15 +65,14 @@ Follow these steps in order.
 
 ### Step 1 — Download DesktopPlus
 
-1. Open this page in your web browser:  
-   https://github.com/codemonkey2k5/HomeAssistant-DesktopPlus/releases  
-2. Click the latest release (**DesktopPlus v2.2.0**).  
-3. Under **Assets**, download **`DesktopPlus.exe`**.  
-4. Create a simple folder, for example:  
+1. Click the latest release (**DesktopPlus v2.2.0**).  
+2. Under **Assets**, download **`DesktopPlus.exe`**.  
+3. Create a simple folder, for example:  
    `C:\DesktopPlus`  
-5. Move **DesktopPlus.exe** into that folder.
+4. Move **DesktopPlus.exe** into that folder.
 
 That’s it for files. You only need the one program file to start.
+There is no installation. This is a fully portable application. 
 
 ---
 
